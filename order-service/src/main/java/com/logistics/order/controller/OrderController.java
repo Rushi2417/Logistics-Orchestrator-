@@ -12,6 +12,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/orders")
 @RequiredArgsConstructor
+@CrossOrigin(origins = "*")
 public class OrderController {
 
     // Spring will automatically inject the repository via constructor (thanks to @RequiredArgsConstructor)

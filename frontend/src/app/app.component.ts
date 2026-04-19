@@ -42,7 +42,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   connectToWebSockets() {
     this.stompClient = new Client({
-      webSocketFactory: () => new SockJS('https://logistics-orchestrator.onrender.com/ws'),
+      webSocketFactory: () => new SockJS('https://order-service-jkdt.onrender.com/ws'),
       debug: function (str) {
         console.log(str);
       },
@@ -76,7 +76,7 @@ export class AppComponent implements OnInit, OnDestroy {
   }
 
   fetchOrders() {
-    fetch('https://logistics-orchestrator.onrender.com/api/orders')
+    fetch('https://order-service-jkdt.onrender.com/api/orders')
       .then(res => res.json())
       .then((data: Order[]) => {
         this.orders = data;
@@ -91,7 +91,7 @@ export class AppComponent implements OnInit, OnDestroy {
       quantity: 1
     };
 
-    fetch('https://logistics-orchestrator.onrender.com/api/orders', {
+    fetch('https://order-service-jkdt.onrender.com/api/orders', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)

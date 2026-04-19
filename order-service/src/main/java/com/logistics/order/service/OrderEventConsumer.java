@@ -28,12 +28,12 @@ public class OrderEventConsumer {
     @RabbitListener(queues = RabbitMQConfig.ORDER_QUEUE)
     public void processOrderEvents(Map<String, Object> eventPayload) {
         // We use Map to bypass Jackson __TypeId__ restrictions across microservice packages.
-        if (eventPayload.containsKey("reservedQuantity")) {
+        if (eventPayload.containsKey("message") && eventPayload.containsKey("status")) {
             // It's an InventoryReservedEvent
             InventoryReservedEvent event = objectMapper.convertValue(eventPayload, InventoryReservedEvent.class);
             processInventoryEvent(event);
-        } else if (eventPayload.containsKey("driverId") || eventPayload.containsKey("status")) {
-            // Check status presence for ShippingEvent
+        } else if (eventPayload.containsKey("driverId")) {
+            // Check driverId presence for ShippingEvent
             ShippingEvent event = objectMapper.convertValue(eventPayload, ShippingEvent.class);
             processShippingEvent(event);
         }
