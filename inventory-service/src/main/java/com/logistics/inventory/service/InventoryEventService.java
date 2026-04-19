@@ -51,15 +51,15 @@ public class InventoryEventService {
                 inventoryRepository.save(inv);
 
                 log.info("Stock reserved. Emitting InventoryReservedEvent (SUCCESS)");
-                rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, "shipping.reserve", new InventoryReservedEvent(event.getOrderId(), event.getProductId(), event.getQuantity(), "SUCCESS"));
+                rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, "shipping.reserve", new InventoryReservedEvent(event.getOrderId(), event.getProductId(), event.getQuantity(), "SUCCESS", "Stock reserved"));
                 // Also tell order service
-                rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, "order.update", new InventoryReservedEvent(event.getOrderId(), event.getProductId(), event.getQuantity(), "SUCCESS"));
+                rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, "order.update", new InventoryReservedEvent(event.getOrderId(), event.getProductId(), event.getQuantity(), "SUCCESS", "Stock reserved"));
                 return;
             }
         }
 
         log.warn("Stock unavailable! Emitting InventoryReservedEvent (FAILED)");
-        rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, "order.update", new InventoryReservedEvent(event.getOrderId(), event.getProductId(), event.getQuantity(), "FAILED"));
+        rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, "order.update", new InventoryReservedEvent(event.getOrderId(), event.getProductId(), event.getQuantity(), "FAILED", "Out of stock"));
     }
 
     private void processShippingFailure(ShippingEvent event) {
