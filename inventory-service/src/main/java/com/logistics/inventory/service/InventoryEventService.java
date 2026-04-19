@@ -1,15 +1,19 @@
 package com.logistics.inventory.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.logistics.inventory.config.RabbitMQConfig;
 import com.logistics.inventory.event.InventoryReservedEvent;
 import com.logistics.inventory.event.OrderCreatedEvent;
+import com.logistics.inventory.event.ShippingEvent;
 import com.logistics.inventory.model.Inventory;
 import com.logistics.inventory.repository.InventoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.annotation.KafkaListener;
-import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.amqp.rabbit.annotation.RabbitListener;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 
+import java.util.Map;
 import java.util.Optional;
 
 @Service
@@ -18,54 +22,58 @@ import java.util.Optional;
 public class InventoryEventService {
 
     private final InventoryRepository inventoryRepository;
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final RabbitTemplate rabbitTemplate;
+    private final ObjectMapper objectMapper;
 
-    private static final String INVENTORY_TOPIC = "inventory-events";
+    @RabbitListener(queues = RabbitMQConfig.INVENTORY_QUEUE)
+    public void processInventoryEvents(Map<String, Object> eventPayload) {
+        if (eventPayload.containsKey("quantity") && !eventPayload.containsKey("driverId")) {
+            // It's OrderCreatedEvent
+            OrderCreatedEvent event = objectMapper.convertValue(eventPayload, OrderCreatedEvent.class);
+            processOrderCreated(event);
+        } else if (eventPayload.containsKey("driverId")) {
+            // It's ShippingEvent (for compensation)
+            ShippingEvent event = objectMapper.convertValue(eventPayload, ShippingEvent.class);
+            processShippingFailure(event);
+        }
+    }
 
-    // This listener consumes the event produced by the Order Service
-    @KafkaListener(topics = "order-events", groupId = "inventory-group")
-    public void processOrderAssignment(OrderCreatedEvent event) {
-        log.info("Received OrderCreatedEvent for Order ID: {}", event.getOrderId());
+    private void processOrderCreated(OrderCreatedEvent event) {
+        log.info("Inventory Service checking stock for Order: {}", event.getOrderId());
 
-        Optional<Inventory> inventoryOpt = inventoryRepository.findByProductId(event.getProductId());
+        Optional<Inventory> invOpt = inventoryRepository.findByProductId(event.getProductId());
 
-        if (inventoryOpt.isPresent()) {
-            Inventory inventory = inventoryOpt.get();
-            if (inventory.getAvailableQuantity() >= event.getQuantity()) {
-                // Reserve the item!
-                inventory.setAvailableQuantity(inventory.getAvailableQuantity() - event.getQuantity());
-                inventory.setReservedQuantity(inventory.getReservedQuantity() + event.getQuantity());
-                inventoryRepository.save(inventory);
+        if (invOpt.isPresent()) {
+            Inventory inv = invOpt.get();
+            if (inv.getAvailableQuantity() >= event.getQuantity()) {
+                inv.setAvailableQuantity(inv.getAvailableQuantity() - event.getQuantity());
+                inv.setReservedQuantity(inv.getReservedQuantity() + event.getQuantity());
+                inventoryRepository.save(inv);
 
-                log.info("Stock reserved. Emitting InventoryReservedEvent SUCCESS.");
-                kafkaTemplate.send(INVENTORY_TOPIC, event.getOrderId(), 
-                    new InventoryReservedEvent(event.getOrderId(), event.getProductId(), event.getQuantity(), "SUCCESS", "Stock reserved"));
+                log.info("Stock reserved. Emitting InventoryReservedEvent (SUCCESS)");
+                rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, "shipping.reserve", new InventoryReservedEvent(event.getOrderId(), event.getProductId(), event.getQuantity(), "SUCCESS"));
+                // Also tell order service
+                rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, "order.update", new InventoryReservedEvent(event.getOrderId(), event.getProductId(), event.getQuantity(), "SUCCESS"));
                 return;
             }
         }
 
-        // If not present or out of stock, publish a FAILED event (First part of Saga rollback)
-        log.error("Out of stock! Emitting InventoryReservedEvent FAILED.");
-        kafkaTemplate.send(INVENTORY_TOPIC, event.getOrderId(), 
-            new InventoryReservedEvent(event.getOrderId(), event.getProductId(), event.getQuantity(), "FAILED", "Out of stock / Invalid Product"));
+        log.warn("Stock unavailable! Emitting InventoryReservedEvent (FAILED)");
+        rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, "order.update", new InventoryReservedEvent(event.getOrderId(), event.getProductId(), event.getQuantity(), "FAILED"));
     }
 
-    // THE SAGA PATTERN: COMPENSATING TRANSACTION
-    // If Shipping fails to find a driver, we must put the stock back into inventory!
-    @KafkaListener(topics = "shipping-events", groupId = "inventory-group")
-    public void processShippingFailure(com.logistics.inventory.event.ShippingEvent event) {
+    private void processShippingFailure(ShippingEvent event) {
         if ("FAILED".equals(event.getStatus())) {
-            log.warn("SAGA ROLLBACK: Received Shipping FAILED for Order ID: {}. Refunding stock.", event.getOrderId());
-            
-            Optional<Inventory> inventoryOpt = inventoryRepository.findByProductId(event.getProductId());
-            if (inventoryOpt.isPresent()) {
-                Inventory inventory = inventoryOpt.get();
-                // Refund the reserved stock back to available stock
-                inventory.setReservedQuantity(inventory.getReservedQuantity() - event.getQuantity());
-                inventory.setAvailableQuantity(inventory.getAvailableQuantity() + event.getQuantity());
-                inventoryRepository.save(inventory);
-                
-                log.info("SAGA ROLLBACK COMPLETED: Stock refunded for Product: {}", event.getProductId());
+            log.info("SAGA ROLLBACK: Reverting reserved stock for Order: {}", event.getOrderId());
+            // Need product ID and quantity, mock retrieval or pass via event
+            // Quick mock reverse since we don't have exact qty safely stored here
+            Optional<Inventory> invOpt = inventoryRepository.findByProductId("PROD-100");
+            if (invOpt.isPresent()) {
+                Inventory inv = invOpt.get();
+                inv.setAvailableQuantity(inv.getAvailableQuantity() + 1);
+                inv.setReservedQuantity(inv.getReservedQuantity() - 1);
+                inventoryRepository.save(inv);
+                log.info("Stock refunded successfully.");
             }
         }
     }

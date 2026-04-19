@@ -3,7 +3,7 @@ package com.logistics.order.service;
 import com.logistics.order.event.OrderCreatedEvent;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.kafka.core.KafkaTemplate;
+import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -11,12 +11,10 @@ import org.springframework.stereotype.Service;
 @Slf4j
 public class OrderEventProducer {
 
-    private final KafkaTemplate<String, Object> kafkaTemplate;
+    private final RabbitTemplate rabbitTemplate;
     
-    private static final String TOPIC = "order-events";
-
     public void publishOrderCreatedEvent(OrderCreatedEvent event) {
         log.info("Publishing OrderCreatedEvent for Order ID: {}", event.getOrderId());
-        kafkaTemplate.send(TOPIC, event.getOrderId(), event);
+        rabbitTemplate.convertAndSend("logistics.exchange", "inventory.created", event);
     }
 }
