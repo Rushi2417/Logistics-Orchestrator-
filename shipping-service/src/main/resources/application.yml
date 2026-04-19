@@ -2,9 +2,9 @@ spring:
   application:
     name: shipping-service
   datasource:
-    url: jdbc:postgresql://localhost:5432/shippingdb
+    url: jdbc:postgresql://db.qwutrcnbvlrswcsbfzil.supabase.co:5432/postgres
     username: postgres
-    password: password
+    password: RushikeshBhosale@08
   jpa:
     hibernate:
       ddl-auto: update
