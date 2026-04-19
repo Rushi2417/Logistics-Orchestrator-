@@ -2,8 +2,8 @@ spring:
   application:
     name: shipping-service
   datasource:
-    url: jdbc:postgresql://db.qwutrcnbvlrswcsbfzil.supabase.co:5432/postgres
-    username: postgres
+    url: jdbc:postgresql://aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres
+    username: postgres.qwutrcnbvlrswcsbfzil
     password: RushikeshBhosale@08
   jpa:
     hibernate:
@@ -17,4 +17,4 @@ spring:
     addresses: amqps://aursdcav:mI88FXsJgSK7wakjVyauY4APJMRKhNr6@gerbil.rmq.cloudamqp.com/aursdcav
 
 server:
-  port: 8083
+  port: ${PORT:8083}
