@@ -1,0 +1,47 @@
+.dashboard {
+  padding: 2rem;
+  font-family: Arial, sans-serif;
+
+  button {
+    padding: 10px 20px;
+    background-color: #007bff;
+    color: white;
+    border: none;
+    cursor: pointer;
+    margin-bottom: 20px;
+    border-radius: 4px;
+
+    &:hover {
+      background-color: #0056b3;
+    }
+  }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+    }
+
+    th {
+      background-color: #f4f4f4;
+    }
+
+    .status-cell {
+      .badge {
+        padding: 5px 10px;
+        border-radius: 20px;
+        font-size: 0.85em;
+        font-weight: bold;
+      }
+    }
+
+    tr.pending .badge { background-color: #ffeb3b; color: #000; }
+    tr.inventory_reserved .badge { background-color: #2196f3; color: white; }
+    tr.completed .badge { background-color: #4caf50; color: white; }
+    tr.cancelled .badge { background-color: #f44336; color: white; }
+  }
+}

@@ -1,0 +1,29 @@
+<div class="dashboard">
+  <h1>Logistics Dispatcher Dashboard</h1>
+  <p>Real-time updates via WebSockets</p>
+
+  <button (click)="simulateOrder()">Simulate New Order</button>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Order ID</th>
+        <th>Product</th>
+        <th>Quantity</th>
+        <th>Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      @for (order of orders; track order.id) {
+        <tr [class]="order.status.toLowerCase()">
+          <td>{{ order.id }}</td>
+          <td>{{ order.productId }}</td>
+          <td>{{ order.quantity }}</td>
+          <td class="status-cell">
+            <span class="badge">{{ order.status }}</span>
+          </td>
+        </tr>
+      }
+    </tbody>
+  </table>
+</div>
