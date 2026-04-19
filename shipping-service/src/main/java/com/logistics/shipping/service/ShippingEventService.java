@@ -25,7 +25,7 @@ public class ShippingEventService {
 
     @RabbitListener(queues = RabbitMQConfig.SHIPPING_QUEUE)
     public void processInventoryEvent(Map<String, Object> eventPayload) {
-        if (eventPayload.containsKey("reservedQuantity")) {
+        if (eventPayload.containsKey("message") && eventPayload.containsKey("status")) {
             InventoryReservedEvent event = objectMapper.convertValue(eventPayload, InventoryReservedEvent.class);
             if ("SUCCESS".equals(event.getStatus())) {
                 log.info("Shipping Service allocating driver for Order: {}", event.getOrderId());
