@@ -4,13 +4,10 @@ import org.springframework.amqp.core.*;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.amqp.rabbit.retry.RejectAndDontRequeueRecoverer;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-import org.springframework.retry.policy.SimpleRetryPolicy;
-import org.springframework.retry.support.RetryTemplate;
 
 @Configuration
 public class RabbitMQConfig {
@@ -47,8 +44,8 @@ public class RabbitMQConfig {
     }
 
     /**
-     * Configures the listener factory to REJECT (not requeue) any message that fails
-     * deserialization. This prevents the infinite redeliver death-loop.
+     * Configures the listener to REJECT and DISCARD (not requeue) any message that
+     * fails deserialization — prevents the infinite redeliver death-loop.
      */
     @Bean
     public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
@@ -58,16 +55,8 @@ public class RabbitMQConfig {
         SimpleRabbitListenerContainerFactory factory = new SimpleRabbitListenerContainerFactory();
         factory.setConnectionFactory(connectionFactory);
         factory.setMessageConverter(jsonMessageConverter);
-
-        // Retry once, then reject and discard — never requeue a bad message
-        RetryTemplate retryTemplate = new RetryTemplate();
-        retryTemplate.setRetryPolicy(new SimpleRetryPolicy(1));
-        factory.setRetryTemplate(retryTemplate);
-        factory.setRecoveryCallback(ctx -> {
-            new RejectAndDontRequeueRecoverer().recover(null, ctx.getLastThrowable());
-            return null;
-        });
-
+        // Never requeue a rejected/failed message — drop it instead of looping
+        factory.setDefaultRequeueRejected(false);
         return factory;
     }
 

@@ -27,49 +27,60 @@ public class OrderEventConsumer {
 
     @RabbitListener(queues = RabbitMQConfig.ORDER_QUEUE)
     public void processOrderEvents(Map<String, Object> eventPayload) {
-        // We use Map to bypass Jackson __TypeId__ restrictions across microservice packages.
-        if (eventPayload.containsKey("message") && eventPayload.containsKey("status")) {
-            // It's an InventoryReservedEvent
-            InventoryReservedEvent event = objectMapper.convertValue(eventPayload, InventoryReservedEvent.class);
-            processInventoryEvent(event);
-        } else if (eventPayload.containsKey("driverId")) {
-            // Check driverId presence for ShippingEvent
-            ShippingEvent event = objectMapper.convertValue(eventPayload, ShippingEvent.class);
-            processShippingEvent(event);
+        try {
+            log.info("OrderEventConsumer received payload: {}", eventPayload);
+
+            // ShippingEvent always has "driverId" key (even if null) due to @JsonInclude(ALWAYS)
+            if (eventPayload.containsKey("driverId")) {
+                ShippingEvent event = objectMapper.convertValue(eventPayload, ShippingEvent.class);
+                log.info("Detected ShippingEvent for Order {}: status={}", event.getOrderId(), event.getStatus());
+                processShippingEvent(event);
+            }
+            // InventoryReservedEvent has "message" + "status" but no "driverId"
+            else if (eventPayload.containsKey("message") && eventPayload.containsKey("status")) {
+                InventoryReservedEvent event = objectMapper.convertValue(eventPayload, InventoryReservedEvent.class);
+                log.info("Detected InventoryReservedEvent for Order {}: status={}", event.getOrderId(), event.getStatus());
+                processInventoryEvent(event);
+            } else {
+                log.warn("Unknown event payload, discarding: {}", eventPayload);
+            }
+        } catch (Exception e) {
+            // Log and swallow — never throw, prevents infinite requeue loop
+            log.error("Failed to process event payload, discarding: {}", eventPayload, e);
         }
     }
 
     private void processInventoryEvent(InventoryReservedEvent event) {
-        log.info("Order Service received InventoryEvent for Order {}: {}", event.getOrderId(), event.getStatus());
         Optional<Order> orderOpt = orderRepository.findById(UUID.fromString(event.getOrderId()));
         if (orderOpt.isPresent()) {
             Order order = orderOpt.get();
             if ("FAILED".equals(event.getStatus())) {
                 order.setStatus(OrderStatus.CANCELLED);
-                orderRepository.save(order);
-                messagingTemplate.convertAndSend("/topic/orders", order);
             } else {
                 order.setStatus(OrderStatus.INVENTORY_RESERVED);
-                orderRepository.save(order);
-                messagingTemplate.convertAndSend("/topic/orders", order);
             }
+            orderRepository.save(order);
+            log.info("Order {} updated to {}", order.getId(), order.getStatus());
+            messagingTemplate.convertAndSend("/topic/orders", order);
+        } else {
+            log.warn("Order not found for InventoryEvent: {}", event.getOrderId());
         }
     }
 
     private void processShippingEvent(ShippingEvent event) {
-        log.info("Order Service received ShippingEvent for Order {}: {}", event.getOrderId(), event.getStatus());
         Optional<Order> orderOpt = orderRepository.findById(UUID.fromString(event.getOrderId()));
         if (orderOpt.isPresent()) {
             Order order = orderOpt.get();
             if ("FAILED".equals(event.getStatus())) {
                 order.setStatus(OrderStatus.CANCELLED);
-                orderRepository.save(order);
-                messagingTemplate.convertAndSend("/topic/orders", order);
             } else {
                 order.setStatus(OrderStatus.COMPLETED);
-                orderRepository.save(order);
-                messagingTemplate.convertAndSend("/topic/orders", order);
             }
+            orderRepository.save(order);
+            log.info("Order {} updated to {}", order.getId(), order.getStatus());
+            messagingTemplate.convertAndSend("/topic/orders", order);
+        } else {
+            log.warn("Order not found for ShippingEvent: {}", event.getOrderId());
         }
     }
 }
