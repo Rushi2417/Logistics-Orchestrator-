@@ -1,0 +1,21 @@
+services:
+  - type: web
+    name: order-service
+    env: docker
+    rootDir: order-service
+    dockerfilePath: Dockerfile
+    plan: free
+
+  - type: web
+    name: inventory-service
+    env: docker
+    rootDir: inventory-service
+    dockerfilePath: Dockerfile
+    plan: free
+
+  - type: web
+    name: shipping-service
+    env: docker
+    rootDir: shipping-service
+    dockerfilePath: Dockerfile
+    plan: free
