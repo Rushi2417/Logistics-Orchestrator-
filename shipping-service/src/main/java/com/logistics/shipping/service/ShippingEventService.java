@@ -39,14 +39,14 @@ public class ShippingEventService {
                 // 20% chance to fail to demonstrate SAGA Compensation
                 if (random.nextInt(10) < 2) {
                     log.error("Failed to allocate driver! Triggering SAGA Rollback.");
-                    ShippingEvent failureEvent = new ShippingEvent(event.getOrderId(), "FAILED", null);
+                    ShippingEvent failureEvent = new ShippingEvent(event.getOrderId(), event.getProductId(), event.getQuantity(), "FAILED", null, "Driver allocation failed");
                     // Send failure to Inventory (to refund stock) and Order (to cancel order)
                     rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, "inventory.rollback", failureEvent);
                     rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, "order.update", failureEvent);
                 } else {
                     String driverId = "DRIVER-" + UUID.randomUUID().toString().substring(0, 5);
                     log.info("Driver allocated successfully: {}", driverId);
-                    ShippingEvent successEvent = new ShippingEvent(event.getOrderId(), "SUCCESS", driverId);
+                    ShippingEvent successEvent = new ShippingEvent(event.getOrderId(), event.getProductId(), event.getQuantity(), "SUCCESS", driverId, "Driver allocated");
                     rabbitTemplate.convertAndSend(RabbitMQConfig.EXCHANGE, "order.update", successEvent);
                 }
             }
