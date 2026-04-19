@@ -26,11 +26,12 @@ export interface Order {
 export class AppComponent implements OnInit, OnDestroy {
   title = 'frontend';
   orders: Order[] = [];
+  isLoading = false;
   private stompClient: Client | null = null;
+  private readonly ORDER_SERVICE = 'https://order-service-jkdt.onrender.com';
 
   ngOnInit() {
     this.connectToWebSockets();
-    // Fetch initial state via REST API (in a real app)
     this.fetchOrders();
   }
 
@@ -42,7 +43,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   connectToWebSockets() {
     this.stompClient = new Client({
-      webSocketFactory: () => new SockJS('https://order-service-jkdt.onrender.com/ws'),
+      webSocketFactory: () => new SockJS(`${this.ORDER_SERVICE}/ws`),
       debug: function (str) {
         console.log(str);
       },
@@ -67,35 +68,59 @@ export class AppComponent implements OnInit, OnDestroy {
   updateOrAddOrder(updatedOrder: Order) {
     const index = this.orders.findIndex(o => o.id === updatedOrder.id);
     if (index !== -1) {
-      // Update existing order (e.g. from PENDING -> COMPLETED)
-      this.orders[index] = updatedOrder;
+      this.orders[index] = { ...updatedOrder };
+      // Trigger Angular change detection on the array
+      this.orders = [...this.orders];
     } else {
-      // Add new order
-      this.orders.unshift(updatedOrder);
+      this.orders = [updatedOrder, ...this.orders];
     }
   }
 
   fetchOrders() {
-    fetch('https://order-service-jkdt.onrender.com/api/orders')
-      .then(res => res.json())
-      .then((data: Order[]) => {
-        this.orders = data;
+    fetch(`${this.ORDER_SERVICE}/api/orders`)
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
       })
-      .catch(err => console.error("Could not fetch orders. Make sure backend is running.", err));
+      .then((data: any) => {
+        // Guard: ensure we received an array
+        if (Array.isArray(data)) {
+          this.orders = data;
+        } else {
+          console.warn('Unexpected response format from /api/orders:', data);
+        }
+      })
+      .catch(err => {
+        console.error('Could not fetch orders, retrying in 5s...', err);
+        // Retry after 5 seconds if the backend is still warming up
+        setTimeout(() => this.fetchOrders(), 5000);
+      });
   }
 
   simulateOrder() {
+    if (this.isLoading) return;
+    this.isLoading = true;
+
     const payload = {
-      customerId: "user-" + Math.floor(Math.random() * 1000),
-      productId: "PROD-100",
+      customerId: 'user-' + Math.floor(Math.random() * 1000),
+      productId: 'PROD-100',
       quantity: 1
     };
 
-    fetch('https://order-service-jkdt.onrender.com/api/orders', {
+    fetch(`${this.ORDER_SERVICE}/api/orders`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
-    }).then(res => res.json())
-      .catch(err => console.error(err));
+    })
+      .then(res => {
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        return res.json();
+      })
+      .then((newOrder: Order) => {
+        // Optimistically add the new order to the top immediately
+        this.updateOrAddOrder(newOrder);
+      })
+      .catch(err => console.error('Failed to create order:', err))
+      .finally(() => { this.isLoading = false; });
   }
 }

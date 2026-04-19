@@ -2,7 +2,9 @@
   <h1>Logistics Dispatcher Dashboard</h1>
   <p>Real-time updates via WebSockets</p>
 
-  <button (click)="simulateOrder()">Simulate New Order</button>
+  <button (click)="simulateOrder()" [disabled]="isLoading" [class.loading]="isLoading">
+    {{ isLoading ? 'Creating...' : 'Simulate New Order' }}
+  </button>
 
   <table>
     <thead>
